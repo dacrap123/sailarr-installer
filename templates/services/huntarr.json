@@ -1,0 +1,25 @@
+{
+  "service": "huntarr",
+  "description": "Huntarr - Missing Content Discovery",
+  "compose_file": "huntarr.yml",
+  "setup": {
+    "steps": [
+      {
+        "action": "wait_for_service",
+        "description": "Waiting for Huntarr to be ready",
+        "params": {
+          "service": "huntarr",
+          "port": 9706,
+          "timeout": 120
+        }
+      },
+      {
+        "action": "log_info",
+        "description": "Huntarr access info",
+        "params": {
+          "message": "Huntarr available at http://${SERVER_IP}:9706 or huntarr.${DOMAIN_NAME} when Traefik is enabled"
+        }
+      }
+    ]
+  }
+}

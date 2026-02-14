@@ -33,11 +33,12 @@ services:
     - traefik.http.services.decypharr.loadbalancer.server.port=8282
     volumes:
     # Config directory
-    - ${ROOT_DIR}/config/decypharr-config:/app
+    - ${CONFIG}/decypharr-config:/app
     # Data directory (same as RDT Client for compatibility)
-    - ${ROOT_DIR}/data:/data
+    - ${MEDIA}:/data/media
+    - ${DOWNLOADS}:/data/downloads
     # Symlinks directory
-    - ${ROOT_DIR}/data/symlinks:/data/symlinks:rw
+    - ${DOWNLOADS}/symlinks:/data/symlinks:rw
     # Mount propagation for FUSE
     - /mnt/mediacenter:/mnt/mediacenter:rshared
     restart: on-failure:5

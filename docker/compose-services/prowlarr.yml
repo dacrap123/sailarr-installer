@@ -26,7 +26,7 @@ services:
     - /tmp:mode=770,noexec,size=30M,uid=${PROWLARR_UID},gid=${MEDIACENTER_GID}
     - /logs:mode=770,size=50M,uid=${PROWLARR_UID},gid=${MEDIACENTER_GID}
     volumes:
-    - ${ROOT_DIR}/config/prowlarr-config:/config
+    - ${CONFIG}/prowlarr-config:/config
     ports:
     - ${PROWLARR_PORT}:9696
     restart: on-failure:5
