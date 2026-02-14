@@ -27,7 +27,7 @@ This installer deploys a complete media automation stack that streams content fr
 
 ```bash
 # Clone the repository
-git clone https://github.com/JaviPege/sailarr-installer.git
+git clone https://github.com/dacrap123/sailarr-installer.git
 cd sailarr-installer
 
 # Run the installer

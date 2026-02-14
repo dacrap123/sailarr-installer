@@ -36,7 +36,7 @@ Before starting the installation, ensure you have:
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/JaviPege/sailarr-installer.git
+git clone https://github.com/dacrap123/sailarr-installer.git
 cd sailarr-installer
 ```
 
