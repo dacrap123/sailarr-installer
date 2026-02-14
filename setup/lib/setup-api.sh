@@ -111,14 +111,14 @@ add_root_folder() {
 
 # Add download client to *arr service
 add_download_client() {
-    local service=$1      # radarr or sonarr
+    local service=$1      # radarr, sonarr, or bookshelf/readarr
     local port=$2
     local api_key=$3
     local client_name=$4  # Decypharr or RDTClient
     local client_host=$5  # decypharr or rdtclient
     local client_port=$6
     local client_api_key=$7
-    local category=$8     # movies, tv, radarr, or sonarr
+    local category=$8     # movies, tv, books
 
     log_info "Adding download client '$client_name' to $service"
 
@@ -128,6 +128,8 @@ add_download_client() {
         category_fields="{\"name\": \"movieCategory\", \"value\": \"$category\"},
             {\"name\": \"recentMoviePriority\", \"value\": 0},
             {\"name\": \"olderMoviePriority\", \"value\": 0},"
+    elif [ "$service" = "bookshelf" ] || [ "$service" = "readarr" ]; then
+        category_fields="{\"name\": \"bookCategory\", \"value\": \"$category\"},"
     else
         category_fields="{\"name\": \"tvCategory\", \"value\": \"$category\"},
             {\"name\": \"recentTvPriority\", \"value\": 0},
@@ -168,12 +170,13 @@ add_download_client() {
     fi
 }
 
+
 # Add *arr application to Prowlarr
 add_arr_to_prowlarr() {
     log_function_enter "add_arr_to_prowlarr" "$1 $2 [api_key] $4 [prowlarr_key]"
 
-    local service=$1          # radarr or sonarr
-    local service_port=$2     # 7878 or 8989
+    local service=$1          # radarr, sonarr, bookshelf/readarr
+    local service_port=$2
     local service_api_key=$3
     local prowlarr_port=$4
     local prowlarr_api_key=$5
@@ -186,16 +189,26 @@ add_arr_to_prowlarr() {
     if [ "$service" = "radarr" ]; then
         sync_categories="[2000,2010,2020,2030,2040,2045,2050,2060]"
         contract_name="RadarrSettings"
+    elif [ "$service" = "bookshelf" ] || [ "$service" = "readarr" ]; then
+        sync_categories="[7000,7010,7020,7030,7040,7050,7060]"
+        contract_name="ReadarrSettings"
     else
         sync_categories="[5000,5010,5020,5030,5040,5045,5050,5060,5070,5080,5090]"
         contract_name="SonarrSettings"
     fi
 
+    local app_name="${service^}"
+    local implementation_name="${service^}"
+    if [ "$service" = "bookshelf" ] || [ "$service" = "readarr" ]; then
+        app_name="Bookshelf"
+        implementation_name="Readarr"
+    fi
+
     local data="{
-        \"name\": \"${service^}\",
+        \"name\": \"$app_name\",
         \"syncLevel\": \"fullSync\",
-        \"implementation\": \"${service^}\",
-        \"implementationName\": \"${service^}\",
+        \"implementation\": \"$implementation_name\",
+        \"implementationName\": \"$implementation_name\",
         \"configContract\": \"$contract_name\",
         \"fields\": [
             {\"name\": \"prowlarrUrl\", \"value\": \"http://prowlarr:$prowlarr_port\"},
@@ -207,13 +220,14 @@ add_arr_to_prowlarr() {
     }"
 
     if api_call "POST" "prowlarr" "$prowlarr_port" "applications" "$prowlarr_api_key" "$data" "v1" > /dev/null; then
-        log_success "${service^} application added to Prowlarr"
+        log_success "$app_name application added to Prowlarr"
         return 0
     else
-        log_error "Failed to add ${service^} application to Prowlarr"
+        log_error "Failed to add $app_name application to Prowlarr"
         return 1
     fi
 }
+
 
 # Add remote path mapping
 add_remote_path_mapping() {

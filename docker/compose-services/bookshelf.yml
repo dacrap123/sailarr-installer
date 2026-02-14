@@ -27,6 +27,8 @@ services:
     - /tmp:mode=770,noexec,size=30M,uid=${BOOKSHELF_UID},gid=${MEDIACENTER_GID}
     - /logs:mode=770,size=50M,uid=${BOOKSHELF_UID},gid=${MEDIACENTER_GID}
     volumes:
+    - ${ROOT_DIR}/config/bookshelf-config:/config
+    - ${ROOT_DIR}/data:/data
     - ${CONFIG}/bookshelf-config:/config
     - ${MEDIA}:/data/media
     - ${DOWNLOADS}:/data/downloads

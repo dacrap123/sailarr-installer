@@ -583,14 +583,3 @@ Once installation is complete:
 7. Start requesting content and enjoy!
 
 
-## Docker Data-Root Migration (Optional)
-
-During setup, the installer asks: `Move Docker data-root to SSD? [y/N]`. If enabled:
-- Uses `/etc/docker/daemon.json` `data-root` (no systemd unit edits).
-- Validates mount path exists, is mounted (`findmnt`), and writable.
-- If current Docker Root Dir already matches target, migration is skipped.
-- If daemon.json has a different data-root, installer asks explicit confirmation before overwrite.
-- Migration is copy-only with: `rsync -aHAX --numeric-ids /var/lib/docker/ <target>/`.
-- Stops `docker`, `docker.socket`, and `containerd` during migration, then restarts them.
-- Verifies with `docker info | grep -i "Docker Root Dir"`.
-- `/var/lib/docker` is **not** auto-deleted.

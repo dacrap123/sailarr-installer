@@ -779,6 +779,10 @@ show_installation_summary() {
     echo ""
     echo "DIRECTORIES TO BE CREATED"
     echo "-------------------------"
+    echo "  - ${ROOT_DIR}/config/{sonarr,radarr,recyclarr,prowlarr,overseerr,plex,autoscan,zilean,decypharr,bazarr,huntarr,bookshelf}-config"
+    echo "  - ${ROOT_DIR}/data/symlinks/{radarr,sonarr}"
+    echo "  - ${ROOT_DIR}/data/realdebrid-zurg"
+    echo "  - ${ROOT_DIR}/data/media/{movies,tv,books}"
     echo "  - ${CONFIG}/{sonarr,radarr,recyclarr,prowlarr,overseerr,plex,autoscan,zilean,decypharr,bazarr,huntarr,bookshelf}-config"
     echo "  - ${ROOT_DIR}/data/symlinks/{radarr,sonarr}"
     echo "  - ${ROOT_DIR}/data/realdebrid-zurg"
@@ -859,6 +863,9 @@ setup_core_directories() {
     create_folder "${ROOT_DIR}/data/symlinks/radarr" "$INSTALL_UID:mediacenter" "775"
     create_folder "${ROOT_DIR}/data/symlinks/sonarr" "$INSTALL_UID:mediacenter" "775"
     create_folder "${ROOT_DIR}/data/realdebrid-zurg" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${ROOT_DIR}/data/media/movies" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${ROOT_DIR}/data/media/tv" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${ROOT_DIR}/data/media/books" "$INSTALL_UID:mediacenter" "775"
     create_folder "${MEDIA}/movies" "$INSTALL_UID:mediacenter" "775"
     create_folder "${MEDIA}/tv" "$INSTALL_UID:mediacenter" "775"
     create_folder "${DOWNLOADS}" "$INSTALL_UID:mediacenter" "775"
@@ -973,6 +980,10 @@ configure_core_services() {
     wait_for_http_service "Radarr" "http://localhost:${RADARR_PORT}" 60 2
     wait_for_http_service "Sonarr" "http://localhost:${SONARR_PORT}" 60 2
     wait_for_http_service "Prowlarr" "http://localhost:${PROWLARR_PORT}" 60 2
+    wait_for_http_service "Bookshelf" "http://localhost:${BOOKSHELF_PORT}" 60 2
+    wait_for_http_service "Bazarr" "http://localhost:${BAZARR_PORT}" 60 2
+    wait_for_http_service "Huntarr" "http://localhost:${HUNTARR_PORT}" 60 2
+    wait_for_http_service "Exportarr" "http://localhost:${EXPORTARR_PORT}/metrics" 60 2
     wait_for_http_service "Decypharr" "http://localhost:${DECYPHARR_PORT}" 60 2
 
     echo ""
@@ -982,11 +993,13 @@ configure_core_services() {
     RADARR_API_KEY=$(extract_api_key "radarr" | tail -1)
     SONARR_API_KEY=$(extract_api_key "sonarr" | tail -1)
     PROWLARR_API_KEY=$(extract_api_key "prowlarr" | tail -1)
+    BOOKSHELF_API_KEY=$(extract_api_key "bookshelf" | tail -1)
 
     echo "✓ API keys retrieved"
     echo "  - Radarr:   $RADARR_API_KEY"
     echo "  - Sonarr:   $SONARR_API_KEY"
     echo "  - Prowlarr: $PROWLARR_API_KEY"
+    echo "  - Bookshelf: $BOOKSHELF_API_KEY"
 
     # Configure Radarr
     echo ""
@@ -1080,7 +1093,7 @@ configure_core_services() {
     # Add more indexers (1337x, TPB, YTS, EZTV)
     # ... (keeping the same implementation as original)
 
-    # Add Radarr and Sonarr as applications in Prowlarr
+    # Add Radarr, Sonarr, and Bookshelf as applications in Prowlarr
     if ! add_arr_to_prowlarr "radarr" "$RADARR_PORT" "$RADARR_API_KEY" "$PROWLARR_PORT" "$PROWLARR_API_KEY"; then
         log_error "Installation aborted - failed to add Radarr to Prowlarr"
         exit 1
@@ -1091,9 +1104,17 @@ configure_core_services() {
         exit 1
     fi
 
+    if [ -n "$BOOKSHELF_API_KEY" ]; then
+        if ! add_arr_to_prowlarr "bookshelf" "$BOOKSHELF_PORT" "$BOOKSHELF_API_KEY" "$PROWLARR_PORT" "$PROWLARR_API_KEY"; then
+            log_error "Failed to add Bookshelf to Prowlarr (non-critical)"
+        else
+            echo "  ✓ Bookshelf added to Prowlarr"
+        fi
+    fi
+
     # Trigger indexer sync
     echo ""
-    echo "Triggering indexer sync to Radarr and Sonarr..."
+    echo "Triggering indexer sync to Radarr, Sonarr, and Bookshelf..."
 
     if get_prowlarr_app_id "$PROWLARR_PORT" "$PROWLARR_API_KEY" "Radarr" RADARR_APP_ID; then
         if trigger_prowlarr_sync "$PROWLARR_PORT" "$PROWLARR_API_KEY" "$RADARR_APP_ID"; then
@@ -1104,6 +1125,12 @@ configure_core_services() {
     if get_prowlarr_app_id "$PROWLARR_PORT" "$PROWLARR_API_KEY" "Sonarr" SONARR_APP_ID; then
         if trigger_prowlarr_sync "$PROWLARR_PORT" "$PROWLARR_API_KEY" "$SONARR_APP_ID"; then
             echo "  ✓ Triggered sync to Sonarr"
+        fi
+    fi
+
+    if get_prowlarr_app_id "$PROWLARR_PORT" "$PROWLARR_API_KEY" "Bookshelf" BOOKSHELF_APP_ID; then
+        if trigger_prowlarr_sync "$PROWLARR_PORT" "$PROWLARR_API_KEY" "$BOOKSHELF_APP_ID"; then
+            echo "  ✓ Triggered sync to Bookshelf"
         fi
     fi
 
@@ -1118,6 +1145,7 @@ configure_core_services() {
     export RADARR_API_KEY
     export SONARR_API_KEY
     export PROWLARR_API_KEY
+    export BOOKSHELF_API_KEY
 
     log_success "Core services configured successfully"
 }
@@ -1394,6 +1422,19 @@ echo ""
 echo "Creating directory structure..."
 
 # Config directories for each service
+create_folder "${ROOT_DIR}/config/sonarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/radarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/recyclarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/prowlarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/overseerr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/plex-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/autoscan-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/zilean-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/decypharr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/pinchflat-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/bazarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/huntarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/config/bookshelf-config" "$INSTALL_UID:mediacenter" "775"
 create_folder "${CONFIG}/sonarr-config" "$INSTALL_UID:mediacenter" "775"
 create_folder "${CONFIG}/radarr-config" "$INSTALL_UID:mediacenter" "775"
 create_folder "${CONFIG}/recyclarr-config" "$INSTALL_UID:mediacenter" "775"
@@ -1412,6 +1453,9 @@ create_folder "${CONFIG}/bookshelf-config" "$INSTALL_UID:mediacenter" "775"
 create_folder "${ROOT_DIR}/data/symlinks/radarr" "$INSTALL_UID:mediacenter" "775"
 create_folder "${ROOT_DIR}/data/symlinks/sonarr" "$INSTALL_UID:mediacenter" "775"
 create_folder "${ROOT_DIR}/data/realdebrid-zurg" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/data/media/movies" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/data/media/tv" "$INSTALL_UID:mediacenter" "775"
+create_folder "${ROOT_DIR}/data/media/books" "$INSTALL_UID:mediacenter" "775"
 create_folder "${MEDIA}/movies" "$INSTALL_UID:mediacenter" "775"
     create_folder "${MEDIA}/tv" "$INSTALL_UID:mediacenter" "775"
     create_folder "${DOWNLOADS}" "$INSTALL_UID:mediacenter" "775"
@@ -1423,6 +1467,19 @@ echo ""
 echo "Setting permissions..."
 
 set_permissions "${ROOT_DIR}/data/" "a=,a+rX,u+w,g+w" "$INSTALL_UID:mediacenter"
+set_permissions "${ROOT_DIR}/config/" "a=,a+rX,u+w,g+w" "$INSTALL_UID:mediacenter"
+set_permissions "${ROOT_DIR}/config/sonarr-config" "" "sonarr:mediacenter"
+set_permissions "${ROOT_DIR}/config/radarr-config" "" "radarr:mediacenter"
+set_permissions "${ROOT_DIR}/config/recyclarr-config" "" "recyclarr:mediacenter"
+set_permissions "${ROOT_DIR}/config/prowlarr-config" "" "prowlarr:mediacenter"
+set_permissions "${ROOT_DIR}/config/overseerr-config" "" "overseerr:mediacenter"
+set_permissions "${ROOT_DIR}/config/plex-config" "" "plex:mediacenter"
+set_permissions "${ROOT_DIR}/config/decypharr-config" "" "decypharr:mediacenter"
+set_permissions "${ROOT_DIR}/config/autoscan-config" "" "autoscan:mediacenter"
+set_permissions "${ROOT_DIR}/config/pinchflat-config" "" "pinchflat:mediacenter"
+set_permissions "${ROOT_DIR}/config/bazarr-config" "" "bazarr:mediacenter"
+set_permissions "${ROOT_DIR}/config/huntarr-config" "" "huntarr:mediacenter"
+set_permissions "${ROOT_DIR}/config/bookshelf-config" "" "bookshelf:mediacenter"
 set_permissions "${CONFIG}/" "a=,a+rX,u+w,g+w" "$INSTALL_UID:mediacenter"
 set_permissions "${CONFIG}/sonarr-config" "" "sonarr:mediacenter"
 set_permissions "${CONFIG}/radarr-config" "" "radarr:mediacenter"
@@ -1841,6 +1898,10 @@ if [[ $autoconfig_choice =~ ^[Yy]$ ]]; then
     wait_for_http_service "Radarr" "http://localhost:${RADARR_PORT}" 60 2
     wait_for_http_service "Sonarr" "http://localhost:${SONARR_PORT}" 60 2
     wait_for_http_service "Prowlarr" "http://localhost:${PROWLARR_PORT}" 60 2
+    wait_for_http_service "Bookshelf" "http://localhost:${BOOKSHELF_PORT}" 60 2
+    wait_for_http_service "Bazarr" "http://localhost:${BAZARR_PORT}" 60 2
+    wait_for_http_service "Huntarr" "http://localhost:${HUNTARR_PORT}" 60 2
+    wait_for_http_service "Exportarr" "http://localhost:${EXPORTARR_PORT}/metrics" 60 2
 
     # Skip Zilean wait - it can take 10-30 minutes to import DMM data on first run
     echo "Zilean starting in background (will import DMM data, can take 10-30 minutes)"
@@ -1859,13 +1920,15 @@ if [[ $autoconfig_choice =~ ^[Yy]$ ]]; then
     RADARR_API_KEY=$(extract_api_key "radarr" | tail -1)
     SONARR_API_KEY=$(extract_api_key "sonarr" | tail -1)
     PROWLARR_API_KEY=$(extract_api_key "prowlarr" | tail -1)
+    BOOKSHELF_API_KEY=$(extract_api_key "bookshelf" | tail -1)
 
-    if [ -z "$RADARR_API_KEY" ] || [ -z "$SONARR_API_KEY" ] || [ -z "$PROWLARR_API_KEY" ]; then
+    if [ -z "$RADARR_API_KEY" ] || [ -z "$SONARR_API_KEY" ] || [ -z "$PROWLARR_API_KEY" ] || [ -z "$BOOKSHELF_API_KEY" ]; then
         log_error "Failed to retrieve API keys. Services may not be fully initialized."
         log_error "Missing API keys:"
         [ -z "$RADARR_API_KEY" ] && log_error "  - Radarr API key is empty"
         [ -z "$SONARR_API_KEY" ] && log_error "  - Sonarr API key is empty"
         [ -z "$PROWLARR_API_KEY" ] && log_error "  - Prowlarr API key is empty"
+        [ -z "$BOOKSHELF_API_KEY" ] && log_error "  - Bookshelf API key is empty"
         log_error "Check service logs: docker logs radarr | docker logs sonarr | docker logs prowlarr"
         log_error "Installation aborted - cannot continue without API keys"
         exit 1
@@ -1875,6 +1938,7 @@ if [[ $autoconfig_choice =~ ^[Yy]$ ]]; then
     echo "  - Radarr:   $RADARR_API_KEY"
     echo "  - Sonarr:   $SONARR_API_KEY"
     echo "  - Prowlarr: $PROWLARR_API_KEY"
+    echo "  - Bookshelf: $BOOKSHELF_API_KEY"
 
         # Configure Radarr
         RADARR_API_KEY=$(configure_arr_service "radarr" "$RADARR_PORT" "movies" "decypharr" "$DECYPHARR_CONTAINER_PORT" "$RADARR_API_KEY" | tail -1)
@@ -1895,6 +1959,16 @@ if [[ $autoconfig_choice =~ ^[Yy]$ ]]; then
             if ! configure_arr_authentication "Sonarr" "$SONARR_PORT" "$SONARR_API_KEY" "$AUTH_USERNAME" "$AUTH_PASSWORD"; then
                 log_error "Installation aborted - authentication configuration failed"
                 exit 1
+            fi
+        fi
+
+        # Configure Bookshelf (Readarr fork)
+        BOOKSHELF_API_KEY=$(configure_arr_service "bookshelf" "$BOOKSHELF_PORT" "books" "decypharr" "$DECYPHARR_CONTAINER_PORT" "$BOOKSHELF_API_KEY" | tail -1)
+
+        # Configure Bookshelf authentication if enabled
+        if [ "$AUTH_ENABLED" = true ]; then
+            if ! configure_arr_authentication "Bookshelf" "$BOOKSHELF_PORT" "$BOOKSHELF_API_KEY" "$AUTH_USERNAME" "$AUTH_PASSWORD" "v1"; then
+                log_error "Failed to configure Bookshelf authentication (non-critical)"
             fi
         fi
 
@@ -1993,7 +2067,7 @@ if [[ $autoconfig_choice =~ ^[Yy]$ ]]; then
         api_post_request "http://localhost:${PROWLARR_PORT}/api/v1/indexer" "$PROWLARR_API_KEY" "$YTS_JSON"
         echo "  ✓ Indexer added: YTS"
 
-        # Add Radarr and Sonarr as applications in Prowlarr
+        # Add Radarr, Sonarr, and Bookshelf as applications in Prowlarr
         if ! add_arr_to_prowlarr "radarr" "$RADARR_PORT" "$RADARR_API_KEY" "$PROWLARR_PORT" "$PROWLARR_API_KEY"; then
             log_error "Installation aborted - failed to add Radarr to Prowlarr"
             exit 1
@@ -2004,9 +2078,15 @@ if [[ $autoconfig_choice =~ ^[Yy]$ ]]; then
             exit 1
         fi
 
+        if ! add_arr_to_prowlarr "bookshelf" "$BOOKSHELF_PORT" "$BOOKSHELF_API_KEY" "$PROWLARR_PORT" "$PROWLARR_API_KEY"; then
+            log_error "Failed to add Bookshelf to Prowlarr (non-critical)"
+        else
+            echo "  ✓ Bookshelf added to Prowlarr"
+        fi
+
         # Trigger indexer sync to all applications using atomic functions
         echo ""
-        echo "Triggering indexer sync to Radarr and Sonarr..."
+        echo "Triggering indexer sync to Radarr, Sonarr, and Bookshelf..."
 
         # Get Radarr app ID and trigger sync
         if get_prowlarr_app_id "$PROWLARR_PORT" "$PROWLARR_API_KEY" "Radarr" RADARR_APP_ID; then
@@ -2019,6 +2099,13 @@ if [[ $autoconfig_choice =~ ^[Yy]$ ]]; then
         if get_prowlarr_app_id "$PROWLARR_PORT" "$PROWLARR_API_KEY" "Sonarr" SONARR_APP_ID; then
             if trigger_prowlarr_sync "$PROWLARR_PORT" "$PROWLARR_API_KEY" "$SONARR_APP_ID"; then
                 echo "  ✓ Triggered sync to Sonarr"
+            fi
+        fi
+
+        # Get Bookshelf app ID and trigger sync
+        if get_prowlarr_app_id "$PROWLARR_PORT" "$PROWLARR_API_KEY" "Bookshelf" BOOKSHELF_APP_ID; then
+            if trigger_prowlarr_sync "$PROWLARR_PORT" "$PROWLARR_API_KEY" "$BOOKSHELF_APP_ID"; then
+                echo "  ✓ Triggered sync to Bookshelf"
             fi
         fi
 
@@ -2065,7 +2152,8 @@ if [[ $autoconfig_choice =~ ^[Yy]$ ]]; then
 # API Keys (auto-generated during setup)
 RADARR_API_KEY=$RADARR_API_KEY
 SONARR_API_KEY=$SONARR_API_KEY
-PROWLARR_API_KEY=$PROWLARR_API_KEY"
+PROWLARR_API_KEY=$PROWLARR_API_KEY
+BOOKSHELF_API_KEY=$BOOKSHELF_API_KEY"
         append_to_file "$DOCKER_DIR/.env.install" "$API_KEYS_CONTENT"
 
         echo ""
@@ -2122,12 +2210,14 @@ echo "  ✓ Zurg - Real-Debrid token configured"
 echo "  ✓ Decypharr - Real-Debrid token and settings configured"
 echo "  ✓ Radarr - Root folder + Decypharr download client + quality profiles"
 echo "  ✓ Sonarr - Root folder + Decypharr download client + quality profiles"
+echo "  ✓ Bookshelf - Root folder + Decypharr download client"
+echo "  ✓ Bazarr/Huntarr/Exportarr - Service readiness validated"
 echo "  ✓ Prowlarr - 6 indexers (Torrentio, Zilean, 1337x, TPB, YTS, EZTV)"
-echo "             - Radarr/Sonarr sync enabled (indexers auto-synced)"
+echo "             - Radarr/Sonarr/Bookshelf sync enabled (indexers auto-synced)"
 echo "  ✓ Recyclarr - Quality profiles and naming conventions from TRaSH Guides"
 echo ""
 echo "SERVICES REQUIRING MANUAL CONFIGURATION:"
-echo "  • Plex - Add media libraries (/data/media/movies, /data/media/tv)"
+echo "  • Plex - Add media libraries (/data/media/movies, /data/media/tv, /data/media/books)"
 echo "  • Overseerr - Connect to Plex and Radarr/Sonarr (optional)"
 echo "  • Prowlarr - Add more indexers if needed (optional)"
 echo ""
@@ -2144,12 +2234,20 @@ if [ "$TRAEFIK_ENABLED" = true ]; then
     echo "   • Prowlarr:  http://prowlarr.${DOMAIN_NAME}  (already configured!)"
     echo "   • Radarr:    http://radarr.${DOMAIN_NAME}    (already configured!)"
     echo "   • Sonarr:    http://sonarr.${DOMAIN_NAME}    (already configured!)"
+    echo "   • Bookshelf: http://bookshelf.${DOMAIN_NAME} (already configured!)"
+    echo "   • Bazarr:    http://bazarr.${DOMAIN_NAME}"
+    echo "   • Huntarr:   http://huntarr.${DOMAIN_NAME}"
+    echo "   • Exportarr: http://exportarr.${DOMAIN_NAME}/metrics"
     echo "   • Overseerr: http://overseerr.${DOMAIN_NAME}"
     echo "   • Plex:      http://${DOMAIN_NAME}:32400/web"
 else
     echo "   • Prowlarr:  http://${DOMAIN_NAME}:9696  (already configured!)"
     echo "   • Radarr:    http://${DOMAIN_NAME}:7878  (already configured!)"
     echo "   • Sonarr:    http://${DOMAIN_NAME}:8989  (already configured!)"
+    echo "   • Bookshelf: http://${DOMAIN_NAME}:8787  (already configured!)"
+    echo "   • Bazarr:    http://${DOMAIN_NAME}:6767"
+    echo "   • Huntarr:   http://${DOMAIN_NAME}:9706"
+    echo "   • Exportarr: http://${DOMAIN_NAME}:9705/metrics"
     echo "   • Overseerr: http://${DOMAIN_NAME}:5055"
     echo "   • Plex:      http://${DOMAIN_NAME}:32400/web"
 fi
@@ -2159,6 +2257,7 @@ echo ""
 echo "   PLEX - Add media libraries:"
 echo "   • Movies: /data/media/movies"
 echo "   • TV Shows: /data/media/tv"
+echo "   • Books: /data/media/books"
 echo "   • YouTube: /data/media/youtube"
 echo ""
 echo "   OVERSEERR - Connect to Plex and Radarr/Sonarr:"
@@ -2171,6 +2270,7 @@ echo "   API KEYS FOR OVERSEERR CONFIGURATION:"
 echo "   • Radarr API Key: ${RADARR_API_KEY}"
 echo "   • Sonarr API Key: ${SONARR_API_KEY}"
 echo "   • Prowlarr API Key: ${PROWLARR_API_KEY}"
+echo "   • Bookshelf API Key: ${BOOKSHELF_API_KEY}"
 echo ""
 echo "   PINCHFLAT - Configure YouTube downloads (optional)"
 echo "   TAUTULLI - Connect to Plex for statistics (optional)"
