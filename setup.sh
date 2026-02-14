@@ -168,6 +168,82 @@ ensure_docker_installed() {
     echo "NOTE: You may need to re-login for docker group membership to apply."
 }
 
+prompt_docker_data_root_migration() {
+    ask_user_input \
+        "Docker Data Root Migration (Optional)" \
+        "Move Docker storage to SSD via /etc/docker/daemon.json. Existing /var/lib/docker is never auto-deleted." \
+        "Move Docker data-root to SSD? [y/N]: " \
+        "N" \
+        "false" \
+        "move_data_root"
+
+    if [[ ! $move_data_root =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+
+    ask_user_input "" "" "SSD mount path [default: /mnt/ssd]: " "/mnt/ssd" "false" "SSD_MOUNT_PATH"
+    ask_user_input "" "" "Docker data-root path [default: /mnt/ssd/docker]: " "/mnt/ssd/docker" "false" "DOCKER_DATA_ROOT_TARGET"
+
+    if [ ! -d "$SSD_MOUNT_PATH" ]; then
+        echo "ERROR: Mount path does not exist: $SSD_MOUNT_PATH"
+        exit 1
+    fi
+    if ! findmnt "$SSD_MOUNT_PATH" >/dev/null 2>&1; then
+        echo "ERROR: Path is not a mounted filesystem: $SSD_MOUNT_PATH"
+        exit 1
+    fi
+    if [ ! -w "$SSD_MOUNT_PATH" ]; then
+        echo "ERROR: Mount path is not writable: $SSD_MOUNT_PATH"
+        exit 1
+    fi
+
+    local current_root
+    current_root=$(docker info 2>/dev/null | awk -F': ' '/Docker Root Dir/ {print $2}' | xargs)
+
+    if [ "$current_root" = "$DOCKER_DATA_ROOT_TARGET" ]; then
+        echo "Docker Root Dir already set to target ($DOCKER_DATA_ROOT_TARGET). Skipping migration."
+        return 0
+    fi
+
+    local daemon_json="/etc/docker/daemon.json"
+    local overwrite_confirm="y"
+    if [ -f "$daemon_json" ]; then
+        local existing_root
+        existing_root=$(sudo jq -r '."data-root" // empty' "$daemon_json" 2>/dev/null || true)
+        if [ -n "$existing_root" ] && [ "$existing_root" != "$DOCKER_DATA_ROOT_TARGET" ]; then
+            ask_user_input "" "daemon.json already sets data-root=$existing_root" "Overwrite with $DOCKER_DATA_ROOT_TARGET? (y/n): " "n" "false" "overwrite_confirm"
+            if [[ ! $overwrite_confirm =~ ^[Yy]$ ]]; then
+                echo "Skipping Docker data-root migration."
+                return 0
+            fi
+        fi
+    fi
+
+    sudo mkdir -p "$DOCKER_DATA_ROOT_TARGET"
+
+    echo "Stopping Docker services for migration..."
+    sudo systemctl stop docker || true
+    sudo systemctl stop docker.socket || true
+    sudo systemctl stop containerd || true
+
+    echo "Copying Docker data with rsync (copy-only)..."
+    sudo rsync -aHAX --numeric-ids /var/lib/docker/ "$DOCKER_DATA_ROOT_TARGET/"
+
+    if [ -f "$daemon_json" ]; then
+        sudo jq --arg root "$DOCKER_DATA_ROOT_TARGET" '. + {"data-root": $root}' "$daemon_json" | sudo tee "$daemon_json" > /dev/null
+    else
+        echo "{\"data-root\": \"$DOCKER_DATA_ROOT_TARGET\"}" | sudo tee "$daemon_json" > /dev/null
+    fi
+
+    sudo systemctl start containerd
+    sudo systemctl start docker.socket
+    sudo systemctl start docker
+
+    echo "Verifying Docker Root Dir..."
+    docker info | grep -i "Docker Root Dir"
+    echo "Migration complete. NOTE: /var/lib/docker was NOT deleted."
+}
+
 # Create .env.install configuration file
 create_env_install() {
     echo "Creating .env.install configuration file..."
@@ -241,6 +317,10 @@ BOOKSHELF_UID=${BOOKSHELF_UID}
 DOCKER_SOCKET_PATH=/var/run/docker.sock
 HOST_MOUNT_PATH=/
 
+# Split path layout
+CONFIG=${CONFIG}
+MEDIA=${MEDIA}
+DOWNLOADS=${DOWNLOADS}
 EOF
 
     # Reload configuration from .env.install
@@ -661,6 +741,9 @@ show_installation_summary() {
     echo "---------------------"
     echo "Installation directory: ${ROOT_DIR}"
     echo "Docker configuration:   $SCRIPT_DIR/docker/"
+    echo "Config path:           ${CONFIG}"
+    echo "Media path:            ${MEDIA}"
+    echo "Downloads path:        ${DOWNLOADS}"
     echo "Timezone:              ${TIMEZONE}"
     echo "Domain:                ${DOMAIN_NAME}"
     echo ""
@@ -700,6 +783,11 @@ show_installation_summary() {
     echo "  - ${ROOT_DIR}/data/symlinks/{radarr,sonarr}"
     echo "  - ${ROOT_DIR}/data/realdebrid-zurg"
     echo "  - ${ROOT_DIR}/data/media/{movies,tv,books}"
+    echo "  - ${CONFIG}/{sonarr,radarr,recyclarr,prowlarr,overseerr,plex,autoscan,zilean,decypharr,bazarr,huntarr,bookshelf}-config"
+    echo "  - ${ROOT_DIR}/data/symlinks/{radarr,sonarr}"
+    echo "  - ${ROOT_DIR}/data/realdebrid-zurg"
+    echo "  - ${MEDIA}/{movies,tv}"
+    echo "  - ${DOWNLOADS}"
     echo ""
     echo "ADDITIONAL TASKS"
     echo "----------------"
@@ -765,11 +853,11 @@ setup_core_directories() {
     log_section "Creating Core System Directories"
 
     # Config directories for CORE services
-    create_folder "${ROOT_DIR}/config/radarr-config" "$INSTALL_UID:mediacenter" "775"
-    create_folder "${ROOT_DIR}/config/sonarr-config" "$INSTALL_UID:mediacenter" "775"
-    create_folder "${ROOT_DIR}/config/prowlarr-config" "$INSTALL_UID:mediacenter" "775"
-    create_folder "${ROOT_DIR}/config/decypharr-config" "$INSTALL_UID:mediacenter" "775"
-    create_folder "${ROOT_DIR}/config/zilean-config" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${CONFIG}/radarr-config" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${CONFIG}/sonarr-config" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${CONFIG}/prowlarr-config" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${CONFIG}/decypharr-config" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${CONFIG}/zilean-config" "$INSTALL_UID:mediacenter" "775"
 
     # Data directories for CORE services
     create_folder "${ROOT_DIR}/data/symlinks/radarr" "$INSTALL_UID:mediacenter" "775"
@@ -778,6 +866,9 @@ setup_core_directories() {
     create_folder "${ROOT_DIR}/data/media/movies" "$INSTALL_UID:mediacenter" "775"
     create_folder "${ROOT_DIR}/data/media/tv" "$INSTALL_UID:mediacenter" "775"
     create_folder "${ROOT_DIR}/data/media/books" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${MEDIA}/movies" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${MEDIA}/tv" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${DOWNLOADS}" "$INSTALL_UID:mediacenter" "775"
 
     log_success "Core directories created successfully"
 }
@@ -789,13 +880,13 @@ setup_core_permissions() {
 
     # Base permissions
     set_permissions "${ROOT_DIR}/data/" "a=,a+rX,u+w,g+w" "$INSTALL_UID:mediacenter"
-    set_permissions "${ROOT_DIR}/config/" "a=,a+rX,u+w,g+w" "$INSTALL_UID:mediacenter"
+    set_permissions "${CONFIG}/" "a=,a+rX,u+w,g+w" "$INSTALL_UID:mediacenter"
 
     # CORE service permissions
-    set_permissions "${ROOT_DIR}/config/radarr-config" "" "radarr:mediacenter"
-    set_permissions "${ROOT_DIR}/config/sonarr-config" "" "sonarr:mediacenter"
-    set_permissions "${ROOT_DIR}/config/prowlarr-config" "" "prowlarr:mediacenter"
-    set_permissions "${ROOT_DIR}/config/decypharr-config" "" "decypharr:mediacenter"
+    set_permissions "${CONFIG}/radarr-config" "" "radarr:mediacenter"
+    set_permissions "${CONFIG}/sonarr-config" "" "sonarr:mediacenter"
+    set_permissions "${CONFIG}/prowlarr-config" "" "prowlarr:mediacenter"
+    set_permissions "${CONFIG}/decypharr-config" "" "decypharr:mediacenter"
 
     log_success "Core permissions set successfully"
 }
@@ -854,7 +945,7 @@ enable_repair_worker = true
 [logging]
 level = \"info\""
 
-    create_file_from_content "${ROOT_DIR}/config/decypharr-config/config.toml" "$DECYPHARR_CONFIG_CONTENT" "$INSTALL_UID:mediacenter"
+    create_file_from_content "${CONFIG}/decypharr-config/config.toml" "$DECYPHARR_CONFIG_CONTENT" "$INSTALL_UID:mediacenter"
     echo "✓ Decypharr configuration created"
 
     log_success "Core files configured successfully"
@@ -1085,6 +1176,7 @@ log_info "Logs directory: ${SETUP_LOG_DIR}"
 echo ""
 
 ensure_docker_installed
+prompt_docker_data_root_migration
 
 # Check if .env.install exists - if yes, skip configuration and go straight to install
 check_existing_config
@@ -1114,6 +1206,29 @@ if [ "$SKIP_CONFIGURATION" = false ]; then
         "false" \
         "INSTALL_DIR"
 
+    ask_user_input \
+        "Split Paths - Config" \
+        "Base path for service configuration data" \
+        "Enter CONFIG path [press Enter for default]: " \
+        "${CONFIG:-/mnt/ssd/appdata}" \
+        "false" \
+        "CONFIG"
+
+    ask_user_input \
+        "Split Paths - Media" \
+        "Base path for media libraries" \
+        "Enter MEDIA path [press Enter for default]: " \
+        "${MEDIA:-/mnt/hdd/media}" \
+        "false" \
+        "MEDIA"
+
+    ask_user_input \
+        "Split Paths - Downloads" \
+        "Base path for downloader data" \
+        "Enter DOWNLOADS path [press Enter for default]: " \
+        "${DOWNLOADS:-/mnt/hdd/downloads}" \
+        "false" \
+        "DOWNLOADS"
 
     # Ask for timezone
     ask_user_input \
@@ -1320,6 +1435,19 @@ create_folder "${ROOT_DIR}/config/pinchflat-config" "$INSTALL_UID:mediacenter" "
 create_folder "${ROOT_DIR}/config/bazarr-config" "$INSTALL_UID:mediacenter" "775"
 create_folder "${ROOT_DIR}/config/huntarr-config" "$INSTALL_UID:mediacenter" "775"
 create_folder "${ROOT_DIR}/config/bookshelf-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/sonarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/radarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/recyclarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/prowlarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/overseerr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/plex-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/autoscan-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/zilean-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/decypharr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/pinchflat-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/bazarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/huntarr-config" "$INSTALL_UID:mediacenter" "775"
+create_folder "${CONFIG}/bookshelf-config" "$INSTALL_UID:mediacenter" "775"
 
 # Data directories
 create_folder "${ROOT_DIR}/data/symlinks/radarr" "$INSTALL_UID:mediacenter" "775"
@@ -1328,6 +1456,9 @@ create_folder "${ROOT_DIR}/data/realdebrid-zurg" "$INSTALL_UID:mediacenter" "775
 create_folder "${ROOT_DIR}/data/media/movies" "$INSTALL_UID:mediacenter" "775"
 create_folder "${ROOT_DIR}/data/media/tv" "$INSTALL_UID:mediacenter" "775"
 create_folder "${ROOT_DIR}/data/media/books" "$INSTALL_UID:mediacenter" "775"
+create_folder "${MEDIA}/movies" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${MEDIA}/tv" "$INSTALL_UID:mediacenter" "775"
+    create_folder "${DOWNLOADS}" "$INSTALL_UID:mediacenter" "775"
 
 echo "✓ Directory structure created"
 
@@ -1349,6 +1480,19 @@ set_permissions "${ROOT_DIR}/config/pinchflat-config" "" "pinchflat:mediacenter"
 set_permissions "${ROOT_DIR}/config/bazarr-config" "" "bazarr:mediacenter"
 set_permissions "${ROOT_DIR}/config/huntarr-config" "" "huntarr:mediacenter"
 set_permissions "${ROOT_DIR}/config/bookshelf-config" "" "bookshelf:mediacenter"
+set_permissions "${CONFIG}/" "a=,a+rX,u+w,g+w" "$INSTALL_UID:mediacenter"
+set_permissions "${CONFIG}/sonarr-config" "" "sonarr:mediacenter"
+set_permissions "${CONFIG}/radarr-config" "" "radarr:mediacenter"
+set_permissions "${CONFIG}/recyclarr-config" "" "recyclarr:mediacenter"
+set_permissions "${CONFIG}/prowlarr-config" "" "prowlarr:mediacenter"
+set_permissions "${CONFIG}/overseerr-config" "" "overseerr:mediacenter"
+set_permissions "${CONFIG}/plex-config" "" "plex:mediacenter"
+set_permissions "${CONFIG}/decypharr-config" "" "decypharr:mediacenter"
+set_permissions "${CONFIG}/autoscan-config" "" "autoscan:mediacenter"
+set_permissions "${CONFIG}/pinchflat-config" "" "pinchflat:mediacenter"
+set_permissions "${CONFIG}/bazarr-config" "" "bazarr:mediacenter"
+set_permissions "${CONFIG}/huntarr-config" "" "huntarr:mediacenter"
+set_permissions "${CONFIG}/bookshelf-config" "" "bookshelf:mediacenter"
 
 echo "✓ Permissions set"
 
@@ -1397,21 +1541,21 @@ log_success "rclone.conf copied successfully to ${ROOT_DIR}/"
 # Download custom indexer definitions for Prowlarr
 echo ""
 echo "Downloading custom indexer definitions..."
-log_operation "MKDIR" "${ROOT_DIR}/config/prowlarr-config/Definitions/Custom"
-create_folder "${ROOT_DIR}/config/prowlarr-config/Definitions/Custom" "prowlarr:mediacenter" "755"
+log_operation "MKDIR" "${CONFIG}/prowlarr-config/Definitions/Custom"
+create_folder "${CONFIG}/prowlarr-config/Definitions/Custom" "prowlarr:mediacenter" "755"
 
 # Download Torrentio from official repository
 log_operation "DOWNLOAD" "Torrentio indexer definition from GitHub"
 download_file \
     "https://github.com/dreulavelle/Prowlarr-Indexers/raw/main/Custom/torrentio.yml" \
-    "${ROOT_DIR}/config/prowlarr-config/Definitions/Custom/torrentio.yml" \
+    "${CONFIG}/prowlarr-config/Definitions/Custom/torrentio.yml" \
     "prowlarr:mediacenter"
 echo "  ✓ Torrentio indexer definition downloaded"
 
 # Download Zilean from official repository
 download_file \
     "https://github.com/dreulavelle/Prowlarr-Indexers/raw/main/Custom/zilean.yml" \
-    "${ROOT_DIR}/config/prowlarr-config/Definitions/Custom/zilean.yml" \
+    "${CONFIG}/prowlarr-config/Definitions/Custom/zilean.yml" \
     "prowlarr:mediacenter"
 echo "  ✓ Zilean indexer definition downloaded"
 
@@ -1420,7 +1564,7 @@ echo "✓ Custom indexer definitions configured"
 # Configure Zurg with Real-Debrid token
 echo ""
 echo "Configuring Zurg with Real-Debrid token..."
-create_folder "${ROOT_DIR}/config/zurg-config" "rclone:mediacenter" "755"
+create_folder "${CONFIG}/zurg-config" "rclone:mediacenter" "755"
 
 ZURG_CONFIG="# Zurg configuration version
 zurg: v1
@@ -1457,15 +1601,15 @@ directories:
     filters:
       - regex: /.*/"
 
-create_file_from_content "${ROOT_DIR}/config/zurg-config/config.yml" "$ZURG_CONFIG" "rclone:mediacenter"
+create_file_from_content "${CONFIG}/zurg-config/config.yml" "$ZURG_CONFIG" "rclone:mediacenter"
 echo "✓ Zurg configured with Real-Debrid token"
 
 # Configure Decypharr with Real-Debrid token
 echo ""
 echo "Configuring Decypharr with Real-Debrid token..."
-create_folder "${ROOT_DIR}/config/decypharr-config/cache" "decypharr:mediacenter" "755"
-create_folder "${ROOT_DIR}/config/decypharr-config/logs" "decypharr:mediacenter" "755"
-create_folder "${ROOT_DIR}/config/decypharr-config/rclone" "decypharr:mediacenter" "755"
+create_folder "${CONFIG}/decypharr-config/cache" "decypharr:mediacenter" "755"
+create_folder "${CONFIG}/decypharr-config/logs" "decypharr:mediacenter" "755"
+create_folder "${CONFIG}/decypharr-config/rclone" "decypharr:mediacenter" "755"
 
 # Create initial config.json
 DECYPHARR_CONFIG='{
@@ -1529,12 +1673,12 @@ DECYPHARR_CONFIG='{
   "use_auth": false
 }'
 
-create_file_from_content "${ROOT_DIR}/config/decypharr-config/config.json" "$DECYPHARR_CONFIG" "decypharr:mediacenter"
+create_file_from_content "${CONFIG}/decypharr-config/config.json" "$DECYPHARR_CONFIG" "decypharr:mediacenter"
 
 # Create empty auth.json and torrents.json
-create_file_from_content "${ROOT_DIR}/config/decypharr-config/auth.json" "{}" "decypharr:mediacenter"
-create_file_from_content "${ROOT_DIR}/config/decypharr-config/torrents.json" "{}" "decypharr:mediacenter"
-sudo chmod 644 ${ROOT_DIR}/config/decypharr-config/*.json
+create_file_from_content "${CONFIG}/decypharr-config/auth.json" "{}" "decypharr:mediacenter"
+create_file_from_content "${CONFIG}/decypharr-config/torrents.json" "{}" "decypharr:mediacenter"
+sudo chmod 644 ${CONFIG}/decypharr-config/*.json
 echo "✓ Decypharr configured with Real-Debrid token"
 
 # Mount healthcheck auto-repair system

@@ -91,6 +91,7 @@ During installation, you'll configure:
 
 ### 1. Basic Configuration
 - **Installation Directory** - Where to install (default: `/mediacenter`)
+- **Split paths defaults** - `CONFIG=/mnt/ssd/appdata`, `MEDIA=/mnt/hdd/media`, `DOWNLOADS=/mnt/hdd/downloads`
 - **Timezone** - Server timezone (default: `Europe/Madrid`)
 - **Real-Debrid API Token** - Your Real-Debrid authentication
 - **Plex Claim Token** - Link Plex to your account (optional)

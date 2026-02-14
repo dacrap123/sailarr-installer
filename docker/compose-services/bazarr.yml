@@ -28,6 +28,8 @@ services:
     volumes:
     - ${ROOT_DIR}/config/bazarr-config:/config
     - ${ROOT_DIR}/data:/data
+    - ${CONFIG}/bazarr-config:/config
+    - ${MEDIA}:/data/media
     ports:
     - ${BAZARR_PORT}:6767
     restart: on-failure:5

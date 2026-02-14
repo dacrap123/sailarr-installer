@@ -29,6 +29,9 @@ services:
     volumes:
     - ${ROOT_DIR}/config/bookshelf-config:/config
     - ${ROOT_DIR}/data:/data
+    - ${CONFIG}/bookshelf-config:/config
+    - ${MEDIA}:/data/media
+    - ${DOWNLOADS}:/data/downloads
     ports:
     - ${BOOKSHELF_PORT}:8787
     restart: on-failure:5

@@ -19,6 +19,7 @@ services:
     - TZ=${TIMEZONE}
     volumes:
     - ${ROOT_DIR}/config/huntarr-config:/config
+    - ${CONFIG}/huntarr-config:/config
     ports:
     - ${HUNTARR_PORT}:9706
     restart: on-failure:5

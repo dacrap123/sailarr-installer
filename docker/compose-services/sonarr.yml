@@ -28,8 +28,9 @@ services:
     - /tmp:mode=770,noexec,size=50M,uid=${SONARR_UID},gid=${MEDIACENTER_GID}
     - /logs:mode=770,size=100M,uid=${SONARR_UID},gid=${MEDIACENTER_GID}
     volumes:
-    - ${ROOT_DIR}/config/sonarr-config:/config
-    - ${ROOT_DIR}/data:/data
+    - ${CONFIG}/sonarr-config:/config
+    - ${MEDIA}:/data/media
+    - ${DOWNLOADS}:/data/downloads
     ports:
     - ${SONARR_PORT}:8989
     restart: on-failure:5
