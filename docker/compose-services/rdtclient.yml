@@ -33,8 +33,9 @@ services:
     - traefik.http.routers.rdtclient.entrypoints=web
     - traefik.http.services.rdtclient.loadbalancer.server.port=6500
     volumes:
-    - ${ROOT_DIR}/data:/data
-    - ${ROOT_DIR}/config/rdt-config:/data/db
+    - ${MEDIA}:/data/media
+    - ${DOWNLOADS}:/data/downloads
+    - ${CONFIG}/rdt-config:/data/db
     - ${ROOT_DIR}/data/symlinks:/data/symlinks:rw
     restart: on-failure:5
     depends_on:

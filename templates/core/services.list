@@ -14,6 +14,8 @@ rclone
 # Media Management (*arr Stack)
 radarr
 sonarr
+bazarr
+bookshelf
 prowlarr
 
 # Indexers
@@ -25,6 +27,8 @@ decypharr
 
 # Library Updates
 autoscan
+huntarr
+exportarr
 
 # Quality Profiles (runs after *arr services are configured)
 recyclarr

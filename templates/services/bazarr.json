@@ -1,0 +1,25 @@
+{
+  "service": "bazarr",
+  "description": "Bazarr - Subtitle Management",
+  "compose_file": "bazarr.yml",
+  "setup": {
+    "steps": [
+      {
+        "action": "wait_for_service",
+        "description": "Waiting for Bazarr to be ready",
+        "params": {
+          "service": "bazarr",
+          "port": 6767,
+          "timeout": 120
+        }
+      },
+      {
+        "action": "log_info",
+        "description": "Bazarr access info",
+        "params": {
+          "message": "Bazarr available at http://${SERVER_IP}:6767 or bazarr.${DOMAIN_NAME} when Traefik is enabled"
+        }
+      }
+    ]
+  }
+}

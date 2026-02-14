@@ -195,7 +195,7 @@ EOF
             zurg.yml|rclone.yml)
                 category="Real-Debrid Integration"
                 ;;
-            radarr.yml|sonarr.yml|prowlarr.yml)
+            radarr.yml|sonarr.yml|prowlarr.yml|bazarr.yml|bookshelf.yml)
                 category="Media Management"
                 ;;
             zilean*.yml)
@@ -216,7 +216,7 @@ EOF
             traefik*.yml)
                 category="Reverse Proxy"
                 ;;
-            tautulli.yml|homarr.yml|dashdot.yml|watchtower.yml|pinchflat.yml|plextraktsync.yml)
+            tautulli.yml|homarr.yml|dashdot.yml|watchtower.yml|pinchflat.yml|plextraktsync.yml|huntarr.yml|exportarr.yml)
                 category="Optional Services"
                 ;;
             *)

@@ -19,7 +19,7 @@ This installer deploys a complete media automation stack that streams content fr
 
 - **Server:** Ubuntu 20.04+ or Debian 11+ (8GB RAM minimum, 16GB recommended)
 - **Real-Debrid:** Active subscription with [API token](https://real-debrid.com/apitoken)
-- **Docker & Docker Compose:** Must be installed before running the installer
+- **Docker & Docker Compose:** Installer auto-installs Docker Engine + compose plugin when missing (Ubuntu 20.04+ / Debian 11+)
 - **Storage:** 20GB+ available disk space (minimal, 50GB+ recommended)
 - **Domain (optional):** Required only if using Traefik with HTTPS
 
@@ -27,7 +27,7 @@ This installer deploys a complete media automation stack that streams content fr
 
 ```bash
 # Clone the repository
-git clone https://github.com/JaviPege/sailarr-installer.git
+git clone https://github.com/dacrap123/sailarr-installer.git
 cd sailarr-installer
 
 # Run the installer
@@ -48,6 +48,10 @@ The stack includes these services, configured based on your selections:
 - **[Radarr](https://radarr.video/)** - Movie management and automation
 - **[Sonarr](https://sonarr.tv/)** - TV series management and automation
 - **[Prowlarr](https://prowlarr.com/)** - Indexer management for all *Arrs
+- **Bazarr** - Subtitle management
+- **Bookshelf (Readarr fork)** - Book/audiobook library management
+- **Huntarr** - Missing-content discovery automation
+- **Exportarr** - Metrics endpoint exporter (no web UI)
 - **[Zurg](https://github.com/debridmediamanager/zurg-testing)** - Real-Debrid WebDAV server
 - **[Rclone](https://github.com/rclone/rclone)** - Mounts Zurg as local filesystem
 - **[Zilean](https://github.com/iPromKnight/zilean)** - Debrid Media Manager indexer
@@ -87,6 +91,7 @@ During installation, you'll configure:
 
 ### 1. Basic Configuration
 - **Installation Directory** - Where to install (default: `/mediacenter`)
+- **Split paths defaults** - `CONFIG=/mnt/ssd/appdata`, `MEDIA=/mnt/hdd/media`, `DOWNLOADS=/mnt/hdd/downloads`
 - **Timezone** - Server timezone (default: `Europe/Madrid`)
 - **Real-Debrid API Token** - Your Real-Debrid authentication
 - **Plex Claim Token** - Link Plex to your account (optional)
@@ -124,6 +129,10 @@ After installation, access your services at different URLs depending on your con
 - **Dashdot:** `http://SERVER_IP:3001`
 - **Pinchflat:** `http://SERVER_IP:8945`
 - **Autoscan:** `http://SERVER_IP:3030`
+- **Bazarr:** `http://SERVER_IP:6767`
+- **Bookshelf:** `http://SERVER_IP:8787`
+- **Huntarr:** `http://SERVER_IP:9706`
+- **Exportarr metrics:** `http://SERVER_IP:9705/metrics` (metrics-only, no UI)
 
 Replace `SERVER_IP` with your actual server IP address or hostname.
 
@@ -470,3 +479,16 @@ MIT License - Use and modify as needed.
 ## Disclaimer
 
 This tool is for educational purposes. Ensure you comply with your local laws and Real-Debrid's terms of service.
+
+
+## Docker Data-Root Migration (Optional)
+
+During setup, the installer asks: `Move Docker data-root to SSD? [y/N]`. If enabled:
+- Uses `/etc/docker/daemon.json` `data-root` (no systemd unit edits).
+- Validates mount path exists, is mounted (`findmnt`), and writable.
+- If current Docker Root Dir already matches target, migration is skipped.
+- If daemon.json has a different data-root, installer asks explicit confirmation before overwrite.
+- Migration is copy-only with: `rsync -aHAX --numeric-ids /var/lib/docker/ <target>/`.
+- Stops `docker`, `docker.socket`, and `containerd` during migration, then restarts them.
+- Verifies with `docker info | grep -i "Docker Root Dir"`.
+- `/var/lib/docker` is **not** auto-deleted.
