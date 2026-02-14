@@ -99,6 +99,10 @@ setup_mediacenter_users() {
     local tautulli_uid=$(find_available_uid $((zurg_uid + 1)))
     local homarr_uid=$(find_available_uid $((tautulli_uid + 1)))
     local plextraktsync_uid=$(find_available_uid $((homarr_uid + 1)))
+    local bazarr_uid=$(find_available_uid $((plextraktsync_uid + 1)))
+    local exportarr_uid=$(find_available_uid $((bazarr_uid + 1)))
+    local huntarr_uid=$(find_available_uid $((exportarr_uid + 1)))
+    local bookshelf_uid=$(find_available_uid $((huntarr_uid + 1)))
 
     # Create main group
     create_system_group "mediacenter" "$mediacenter_gid"
@@ -119,6 +123,10 @@ setup_mediacenter_users() {
     create_system_user "tautulli" "$tautulli_uid" "$mediacenter_gid" "Tautulli"
     create_system_user "homarr" "$homarr_uid" "$mediacenter_gid" "Homarr"
     create_system_user "plextraktsync" "$plextraktsync_uid" "$mediacenter_gid" "PlexTraktSync"
+    create_system_user "bazarr" "$bazarr_uid" "$mediacenter_gid" "Bazarr"
+    create_system_user "exportarr" "$exportarr_uid" "$mediacenter_gid" "Exportarr"
+    create_system_user "huntarr" "$huntarr_uid" "$mediacenter_gid" "Huntarr"
+    create_system_user "bookshelf" "$bookshelf_uid" "$mediacenter_gid" "Bookshelf"
 
     # Export UIDs/GIDs for use in .env files
     export MEDIACENTER_GID=$mediacenter_gid
@@ -137,6 +145,10 @@ setup_mediacenter_users() {
     export TAUTULLI_UID=$tautulli_uid
     export HOMARR_UID=$homarr_uid
     export PLEXTRAKTSYNC_UID=$plextraktsync_uid
+    export BAZARR_UID=$bazarr_uid
+    export EXPORTARR_UID=$exportarr_uid
+    export HUNTARR_UID=$huntarr_uid
+    export BOOKSHELF_UID=$bookshelf_uid
 
     log_success "All users and groups created successfully"
 }

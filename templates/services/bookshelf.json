@@ -1,0 +1,25 @@
+{
+  "service": "bookshelf",
+  "description": "Bookshelf - Readarr Fork",
+  "compose_file": "bookshelf.yml",
+  "setup": {
+    "steps": [
+      {
+        "action": "wait_for_service",
+        "description": "Waiting for Bookshelf to be ready",
+        "params": {
+          "service": "bookshelf",
+          "port": 8787,
+          "timeout": 120
+        }
+      },
+      {
+        "action": "log_info",
+        "description": "Bookshelf access info",
+        "params": {
+          "message": "Bookshelf available at http://${SERVER_IP}:8787 or bookshelf.${DOMAIN_NAME} when Traefik is enabled"
+        }
+      }
+    ]
+  }
+}

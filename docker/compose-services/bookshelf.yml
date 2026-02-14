@@ -1,0 +1,48 @@
+# Bookshelf - Readarr Fork
+
+services:
+  bookshelf:
+    image: ${BOOKSHELF_IMAGE}:${BOOKSHELF_TAG}
+    env_file:
+      - ../.env.defaults
+      - ../.env.local
+    container_name: bookshelf
+    cpus: 0.5
+    user: ${BOOKSHELF_UID}:${MEDIACENTER_GID}
+    networks:
+      mediacenter:
+        ipv4_address: 172.30.0.24
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--connect-timeout", "3", "http://localhost:8787/ping"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 10s
+    environment:
+    - PUID=${BOOKSHELF_UID}
+    - PGID=${MEDIACENTER_GID}
+    - UMASK=002
+    - TZ=${TIMEZONE}
+    tmpfs:
+    - /tmp:mode=770,noexec,size=30M,uid=${BOOKSHELF_UID},gid=${MEDIACENTER_GID}
+    - /logs:mode=770,size=50M,uid=${BOOKSHELF_UID},gid=${MEDIACENTER_GID}
+    volumes:
+    - ${ROOT_DIR}/config/bookshelf-config:/config
+    - ${ROOT_DIR}/data:/data
+    ports:
+    - ${BOOKSHELF_PORT}:8787
+    restart: on-failure:5
+    logging:
+      driver: local
+      options:
+        max-file: '5'
+        max-size: 10m
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.bookshelf.rule=Host(`${BOOKSHELF_TRAEFIK_NAME}.${DOMAIN_NAME}`)
+    - traefik.http.routers.bookshelf.entrypoints=web
+    - traefik.http.services.bookshelf.loadbalancer.server.port=8787
+    depends_on:
+      prowlarr:
+        condition: service_healthy
+        restart: true

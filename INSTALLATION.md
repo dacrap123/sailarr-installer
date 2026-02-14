@@ -36,7 +36,7 @@ Before starting the installation, ensure you have:
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/JaviPege/sailarr-installer.git
+git clone https://github.com/dacrap123/sailarr-installer.git
 cd sailarr-installer
 ```
 
@@ -581,3 +581,5 @@ Once installation is complete:
 5. Configure notifications in Radarr/Sonarr
 6. Set up remote access (optional)
 7. Start requesting content and enjoy!
+
+
