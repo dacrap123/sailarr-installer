@@ -1,0 +1,26 @@
+{
+  "service": "exportarr",
+  "description": "Exportarr - Metrics Endpoint",
+  "compose_file": "exportarr.yml",
+  "note": "Exportarr exposes metrics only (no web UI).",
+  "setup": {
+    "steps": [
+      {
+        "action": "wait_for_service",
+        "description": "Waiting for Exportarr metrics endpoint",
+        "params": {
+          "service": "exportarr",
+          "port": 9705,
+          "timeout": 120
+        }
+      },
+      {
+        "action": "log_info",
+        "description": "Exportarr metrics access info",
+        "params": {
+          "message": "Exportarr metrics endpoint: http://${SERVER_IP}:9705/metrics (or exportarr.${DOMAIN_NAME}/metrics with Traefik)"
+        }
+      }
+    ]
+  }
+}

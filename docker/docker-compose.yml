@@ -23,7 +23,13 @@ include:
   # Media Management
   - compose-services/radarr.yml
   - compose-services/sonarr.yml
+  - compose-services/bazarr.yml
+  - compose-services/bookshelf.yml
   - compose-services/prowlarr.yml
+
+  # Discovery & Metrics
+  - compose-services/huntarr.yml
+  - compose-services/exportarr.yml
   
   # Download & Streaming
   # - compose-services/rdtclient.yml  # Replaced by Decypharr
